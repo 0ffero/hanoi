@@ -1,10 +1,15 @@
 var vars = {
     DEBUG: true,
 
-    version: 0.1,
+    version: 0.5,
 
     init: function() {
-        
+        let redInc = 1114112; let blueInc = 17; let div=2;
+        let pT = vars.pieces.tints;
+        for (r=0; r<16/div; r++) { // create 8 colours
+            let red = redInc * (15-r*div); let blue = blueInc*(r*div); let colour = red+blue;
+            pT.push(colour);
+        }
     },
 
     // ENGINE FUNCTIONS
@@ -14,25 +19,32 @@ var vars = {
     },
 
     durations: {
-        pieceMoveUpMax     : 500,
-        pieceMoveAcrossMax : 500,
-        pieceMoveDownMax   : 500
+        pieceMoveUpMax     : 250,
+        pieceMoveAcrossMax : 250,
+        pieceMoveDownMax   : 250
     },
 
     files: {
         audio: {
             load: function() {
-                //scene.load.audio('pieceDrop', 'audio/pieceDrop.ogg');
+                scene.load.audio('liftPiece', 'audio/lift.ogg');
+                scene.load.audio('dropPiece', 'audio/drop.ogg');
+                scene.load.audio('perfectScore', 'audio/perfectScore.ogg');
+                scene.load.audio('sparkler', 'audio/sparkler.ogg');
             }
         },
 
         images: {
             init: function() {
-                scene.load.image('piece', 'images/piece.png');
-                scene.load.image('spike', 'images/spike.png');
-                scene.load.image('base', 'images/base.png');
-                //scene.load.spritesheet('xopieces', 'images/xo.png', { frameWidth: 122, frameHeight: 104})
-                //scene.load.atlas('stars', 'images/stars.png', 'images/stars.json');
+                scene.load.image('background',   'images/background.jpg');
+                scene.load.image('base',         'images/base.png');
+                scene.load.image('perfectScore', 'images/perfectScoreWAlpha.png');
+                scene.load.image('piece',        'images/piece.png');
+                scene.load.image('spike',        'images/spike.png');
+                scene.load.image('winner',       'images/winner.png');
+                scene.load.image('spark1',       'particles/white.png');
+                //scene.load.spritesheet('key', 'images/filename.png', { frameWidth: 100, frameHeight: 100 })
+                //scene.load.atlas('key', 'images/filename.png', 'images/filename.json');
             }
         },
 
@@ -93,12 +105,24 @@ var vars = {
             scene.sound.volume=0.2;
         },
 
+        perfectScore: function() {
+            scene.sound.play('perfectScore');
+        },
+
         pieceMoveUp: function() {
 
         },
 
         pieceMoveDown: function() {
 
+        },
+
+        sparklers: function(_enable=true) {
+            if (_enable===true) {
+                scene.sound.play('sparkler', {loop: true})
+            } else {
+                scene.sound.stopByKey('sparkler');
+            }
         }
     },
 
@@ -109,23 +133,34 @@ var vars = {
         difficultyMax: 7,
         initialPosition: 1,
         liftedPiece: -1,
-        solution: [],
         pieceHeight: 160,
         piecePositions: { spike_1: [], spike_2: [], spike_3: [] },
+        solution: [],
         spikeOver: -1,
+        spikeFrom: -1,
         spikePositionsX: [],
 
         init: function() {
             
         },
 
-        checkForWin(_move) {
-            
+        checkForWin() {
+            let gV = vars.game;
+            [...[1,2,3]].forEach( (c)=>{
+                if (gV.piecePositions['spike_' + c].length===gV.difficulty) {
+                    if (c!==gV.initialPosition) { // win found
+                        vars.game.winner();
+                    }
+                }
+            })
         },
 
-
-        dropSelectedPiece: function(_position) {
-            
+        clearPickUpVars: function(){
+            let gV = vars.game;
+            if (gV.spikeFrom!==gV.spikeOver) { vars.player.moves++; vars.UI.updateMoveCount(); }
+            gV.liftedPiece = -1;
+            gV.spikeFrom = -1;
+            gV.spikeOver = -1;
         },
 
         generateSolution: function() {
@@ -134,8 +169,12 @@ var vars = {
         },
 
         restart: function() {
-            
+            vars.player.moves=0;
         },
+
+        winner: function(){
+            vars.UI.winner();
+        }
 
     },
 
@@ -157,31 +196,25 @@ var vars = {
         },
 
         dropPiece: function() {
-            let liftedPiece = vars.game.liftedPiece;
-            let spike = vars.game.spikeOver;
-            let spikeData = vars.game.piecePositions[spike];
+            let gV = vars.game;
+            let liftedPiece = gV.liftedPiece;
+            let spike = gV.spikeOver;
+            let spikeData = gV.piecePositions[spike];
             let pieceObject = scene.children.getByName(liftedPiece);
 
             if (vars.input.isMoveValid(spike,spikeData,parseInt(liftedPiece.replace('piece_','')))) {
-                let pieceHeight = vars.game.pieceHeight;
                 let spikeID = parseInt(spike.replace('spike_', ''));
-                //let spikeObject = scene.children.getByName(spike);
-                let yOffset = vars.game.basePieceY - (spikeData.length * pieceHeight) - (pieceHeight/2);
-                console.log('Dropping ' + pieceObject.name + ' on ' + spike + '\n' + spikeData);
+                let yOffset = vars.pieces.yPositions[spikeData.length];
 
                 pieceObject.setData({ 'moving': false, 'spike': spikeID });
-                vars.game.piecePositions[spike].push(liftedPiece);
-                vars.game.liftedPiece = -1;
-                vars.game.spikeOver = -1;
+                gV.piecePositions[spike].push(liftedPiece);
+                gV.clearPickUpVars();
 
                 scene.tweens.add({ targets: pieceObject, y: yOffset, duration: 250 })
+                scene.sound.play('dropPiece');
+                vars.game.checkForWin();
             } else {
-                scene.tweens.add({
-                    targets: pieceObject,
-                    y: pieceObject.y+50,
-                    yoyo: true,
-                    duration: 250
-                })
+                scene.tweens.add({ targets: pieceObject, y: pieceObject.y+50, yoyo: true, duration: 250 })
             }
         },
 
@@ -212,24 +245,27 @@ var vars = {
         liftPiece: function(_pieceName) {
             // is this the piece theyve clicked on or the spike?
             let piece = _pieceName;
+            let spikeNum = -1;
             if (_pieceName.includes('spike_')) {
                 console.log('Find the top piece on this spike');
-                let spikeNum = piece.replace('spike_','');
+                spikeNum = piece.replace('spike_','');
                 let spikeData = vars.game.piecePositions['spike_' + spikeNum];
                 piece  = spikeData.pop();
             } else { // we need to check that the piece clicked on is at the top of the spike
                 // grab the top piece
                 console.log('Finding the top piece on this spike');
-                let spikeID = vars.input.getSpikeIDfromPiece(piece);
-                let spikeData = vars.game.piecePositions['spike_' + spikeID];
+                spikeNum = vars.input.getSpikeIDfromPiece(piece);
+                let spikeData = vars.game.piecePositions['spike_' + spikeNum];
                 piece  = spikeData.pop();
             }
 
             console.log('Lifting ' + piece);
             vars.game.liftedPiece = piece;
             let object = scene.children.getByName(piece);
+            vars.game.spikeFrom = spikeNum;
             object.setData('moving', true);
             scene.tweens.add({ targets: object, y: 100, duration: 250 })
+            scene.sound.play('liftPiece');
         },
 
         moveRequest: function(_name) {
@@ -242,23 +278,70 @@ var vars = {
         }
     },
 
+    particles: {
+        fireworks: [],
+
+        init: function() {
+            vars.particles.createFireworks();
+        },
+
+        createFireworks: function() {
+            let fA = vars.particles.fireworks;
+            vars.game.spikePositionsX.forEach( (c)=>{
+                let particle = scene.add.particles('spark1').createEmitter({
+                    active: false,
+                    x: c, y: 210,
+                    speed: { min: 200, max: 400 },
+                    angle: { min: 250, max: 290 },
+                    scale: { start: 0.6, end: 0 },
+                    tint: { min: 0xff0000, max: 0xffff00 },
+                    blendMode: 'SCREEN', lifespan: 600, gravityY: 600
+                });
+                fA.push(particle);
+            })
+        },
+
+        fireworksDisable: function() {
+            vars.particles.fireworks.forEach( (c)=> {
+                c.visible=false; c.active=false;
+            })
+        },
+
+        fireworksEnable: function() {
+            vars.particles.fireworks.forEach( (c)=> {
+                c.active=true;
+            })
+        }
+    },
+
+    pieces: {
+        spacing: 2,
+        tints: [],
+        yPositions: []
+    },
+
     player: {
         currentMove: 0,
-        moves: [],
+        moves: 0,
         scores: {
             3: -1, 4: -1, 5: -1, 6: -1, 7: -1
         }
     },
 
+    tweens: {
+        winner: -1,
+    },
+
     UI: {
         init: function() {
             let gV = vars.game;
-            let spike = gV.initialPosition;
-            let piecePositions = gV.piecePositions['spike_' + spike];
+            // BACKGROUND
+            scene.add.image(vars.canvas.cX, vars.canvas.cY, 'background');
             // WELCOME TEXT
             let tints  = consts.tints;
             let depths = consts.depths;
-            scene.add.text(vars.canvas.cX, 900, 'Welcome to the Tower of Hanoi').setFontSize(64).setTint(tints.red).setName('welcomeText').setFontStyle('bold').setOrigin(0.5).setDepth(depths.ui);
+            vars.UI.welcomeMessage('Welcome to the Tower of Hanoi');
+            //scene.add.text(vars.canvas.cX, 900, 'Welcome to the Tower of Hanoi').setFontSize(64).setTint(tints.red).setName('welcomeText').setFontStyle('bold').setOrigin(0.5).setDepth(depths.ui);
 
             // spikes (positions)
             let pieceWidth = 400; let pieceSpacing = 30;
@@ -274,28 +357,98 @@ var vars = {
             // DRAW BASE
             scene.add.image(vars.canvas.cX, 830, 'base');
 
-
             // CREATE THE PIECES
+            let spike = gV.initialPosition;
+            let piecePositions = gV.piecePositions['spike_' + spike];
             let difficulty = vars.game.difficulty;
             let imageHeight = vars.game.pieceHeight;
-            let pieceHeight = 3*imageHeight/difficulty;
+            let pieceHeight = ~~(3*imageHeight/difficulty);
             gV.pieceHeight = pieceHeight;
             let pieceScaleHeight = pieceHeight/160;
-            let pieceSpacingY = 3;
+            let pieceSpacingY = vars.pieces.spacing;
             let tempArray = Phaser.Utils.Array.NumberArray(0,difficulty-1);
             pieceWidth=1; // normalise the width so we can change its scale
             y=vars.game.basePieceY;
+            let pieceTints = vars.pieces.tints;
+            let pTLen = pieceTints.length-1;
             [...tempArray].forEach((c)=> {
-                scene.add.image(spikeXoffset-10, y - (pieceHeight*c)-(pieceHeight/2)-2 - (pieceSpacingY*c), 'piece').setName('piece_' + c).setScale(pieceWidth,pieceScaleHeight).setTint(0xff0000,0xff0000,0x440000,0x440000).setData({ 'id': c, 'spike': spike, 'moving': false }).setInteractive();
+                let actualY = ~~((y - (pieceHeight*c)-(pieceHeight/2)-2 - (pieceSpacingY*c)) + 0.5);
+                vars.pieces.yPositions.push(actualY);
+                let colourBottom = pieceTints[pTLen - c]; // we build the stack from base up, so the colours need to do the same (or it could get confusing)
+                let colourTop = pieceTints[pTLen - (c+1)];
+                scene.add.image(spikeXoffset-10, actualY, 'piece').setName('piece_' + c).setScale(pieceWidth,pieceScaleHeight).setTint(colourTop,colourTop,colourBottom,colourBottom).setData({ 'id': c, 'spike': spike, 'moving': false }).setInteractive();
                 piecePositions.push('piece_' + c);
                 pieceWidth-=0.1;
             })
 
+            scene.add.text(1500, 810, 'Moves: ').setFontSize(48).setTint(tints.black).setName('movesText');
+            scene.add.text(1700, 810, '0').setFontSize(48).setTint(tints.black).setName('movesInt');
+
+            scene.add.image(vars.canvas.cX, vars.canvas.cY + vars.canvas.cY/2, 'winner').setName('winnerImage').setAlpha(0);
+
+            // perfect score
+            scene.add.image(vars.canvas.cX, vars.canvas.cY, 'perfectScore').setName('perfectScore').setAlpha(0).setVisible(false).setScale(2);
+
+            // init fireworks particles
+            vars.particles.init();
+        },
+
+        colourTweenWinner: function() {
+            let target = scene.children.getByName('winnerImage');
+            if (target.alpha===0) { if (vars.tweens.winner!==-1) { vars.tweens.winner.remove(); vars.tweens.winner!=-1; } }
+            let oC = vars.UI.colourTweenWinner;
+            vars.tweens.winner = scene.tweens.addCounter({
+                from: 0, to: 255, duration: 1000, yoyo: true,
+                onUpdate:  function (tween) { if (target.alpha===0) {  if (vars.tweens.winner!==-1) { vars.tweens.winner.remove(); vars.tweens.winner!=-1; } } else { const value = Math.floor(tween.getValue()); if (target.alpha!==0) { target.setTint(Phaser.Display.Color.GetColor(255-value, 255, 0)); } else { if (vars.tweens.winner!==-1) { vars.tweens.winner.remove(); } } } },
+                onComplete: oC
+            });
+        },
+
+        showPerf: function() {
+            let p = scene.children.getByName('perfectScore');
+            p.setVisible(true).setDepth(5);
+            scene.tweens.add({ targets: p, delay: 2500, scale: 1, duration: 500, ease: 'Cubic.easeIn', onComplete: vars.audio.perfectScore })
+            scene.tweens.add({ targets: p, delay: 2500, alpha: 1, duration: 100 })
         },
 
         updateMoveCount: function() {
-            //scene.children.getByName('drawsInt').setText(vars.player.draws);
+            scene.children.getByName('movesInt').setText(vars.player.moves);
         },
+
+        welcomeMessage: function(_msg) {
+            let xStart = 410; let xInc = 38;
+            let y = 950;
+            let alpha = 1;
+            if (_msg.length>0) {
+                let msgArray = _msg.split('');
+                msgArray.forEach( (l, i)=> {
+                    [1.0,0.8,0.6,0.4,0.2].forEach( (a)=> {
+                        let x = xStart + (i*xInc);
+                        let colour = '#333';
+                        if (a<1) { colour = '#f00' }
+                        let c = scene.add.text(x,y,l, { fontStyle: 'bold', color: colour, fontSize: 64 }).setAlpha(a);
+                        scene.tweens.add({
+                            targets: c, delay: i*17+((1-a) * 100), y: y-80, duration: 500, yoyo: true, repeat: -1, ease: 'Quad.easeInOut'
+                        })
+                    })
+                })
+            }
+        },
+
+        winner: function() {
+            let c = scene.children.getByName('winnerImage');
+            c.setDepth(1);
+            scene.tweens.add({ targets: c, y: vars.canvas.cY, duration: 2000, alpha: 1 })
+
+            let best = Math.pow(2,vars.game.difficulty)-1;
+            if (vars.player.moves===best) {
+                // colour cycle the win image
+                vars.UI.colourTweenWinner();
+                vars.UI.showPerf();
+            }
+            vars.particles.fireworksEnable();
+            vars.audio.sparklers(true);
+        }
 
     }
 

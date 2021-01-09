@@ -9,11 +9,6 @@ var config = {
 
     height: vars.canvas.height,
     width: vars.canvas.width,
-    parent: 'HANOI',
-
-    dom: {
-        createContainer: true
-    },
 
     scale: {
         parent: 'HANOI',
@@ -90,9 +85,9 @@ function init() {
         duration: 500
     })
     // DRAW GAME BOARD
-    vars.game.init();
     // INPUT
     vars.input.init();
     // UI
     vars.UI.init();
+    vars.game.init();
 }
