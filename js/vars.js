@@ -1,7 +1,7 @@
 var vars = {
     DEBUG: true,
 
-    version: 0.5,
+    version: 0.6,
 
     init: function() {
         let redInc = 1114112; let blueInc = 17; let div=2;
@@ -25,26 +25,34 @@ var vars = {
     },
 
     files: {
+        newLook: false,
+
         audio: {
             load: function() {
-                scene.load.audio('liftPiece', 'audio/lift.ogg');
-                scene.load.audio('dropPiece', 'audio/drop.ogg');
+                scene.load.audio('liftPiece',    'audio/lift.ogg');
+                scene.load.audio('dropPiece',    'audio/drop.ogg');
                 scene.load.audio('perfectScore', 'audio/perfectScore.ogg');
-                scene.load.audio('sparkler', 'audio/sparkler.ogg');
+                scene.load.audio('sparkler',     'audio/sparkler.ogg');
             }
         },
 
         images: {
             init: function() {
                 scene.load.image('background',   'images/background.jpg');
-                scene.load.image('base',         'images/base.png');
                 scene.load.image('perfectScore', 'images/perfectScoreWAlpha.png');
-                scene.load.image('piece',        'images/piece.png');
-                scene.load.image('spike',        'images/spike.png');
                 scene.load.image('winner',       'images/winner.png');
                 scene.load.image('spark1',       'particles/white.png');
-                //scene.load.spritesheet('key', 'images/filename.png', { frameWidth: 100, frameHeight: 100 })
-                //scene.load.atlas('key', 'images/filename.png', 'images/filename.json');
+                if (vars.files.newLook===false) {
+                    scene.load.image('base',  'images/base.png');
+                    scene.load.image('piece', 'images/piece.png');
+                    scene.load.image('spike', 'images/spike.png');
+                } else {
+                    // NEW LOOK
+                    scene.load.image('nl_base',   'images/newLook/base.png');
+                    scene.load.image('nl_spike',  'images/newLook/spike.png');
+                    scene.load.image('nl_pieceB', 'images/newLook/pieceB.png');
+                    scene.load.image('nl_pieceF', 'images/newLook/pieceF.png');
+                }
             }
         },
 
@@ -129,7 +137,7 @@ var vars = {
     game: {
         basePieceY: 790,
         difficultyLevels: [3,4,5,6,7], // basically the piece count
-        difficulty: 3,
+        difficulty: 4,
         difficultyMax: 7,
         initialPosition: 1,
         liftedPiece: -1,
@@ -341,7 +349,6 @@ var vars = {
             let tints  = consts.tints;
             let depths = consts.depths;
             vars.UI.welcomeMessage('Welcome to the Tower of Hanoi');
-            //scene.add.text(vars.canvas.cX, 900, 'Welcome to the Tower of Hanoi').setFontSize(64).setTint(tints.red).setName('welcomeText').setFontStyle('bold').setOrigin(0.5).setDepth(depths.ui);
 
             // spikes (positions)
             let pieceWidth = 400; let pieceSpacing = 30;
@@ -350,47 +357,76 @@ var vars = {
             [...[1,2,3]].forEach( (c)=> {
                 let actualX = (c-1)*xInc+spikeXoffset-10;
                 Xs.push(actualX);
-                scene.add.image(actualX, y, 'spike').setName('spike_' + c).setInteractive();
+                if (vars.files.newLook===false) {
+                    scene.add.image(actualX, y, 'spike').setName('spike_' + c).setInteractive();
+                }
             })
             gV.spikePositionsX = Xs;
 
-            // DRAW BASE
-            scene.add.image(vars.canvas.cX, 830, 'base');
+            if (vars.files.newLook===true) {
+                vars.UI.initNewLook();
+            } else {
+                // DRAW BASE
+                scene.add.image(vars.canvas.cX, 830, 'base');
+                // CREATE THE PIECES
+                let spike = gV.initialPosition;
+                let piecePositions = gV.piecePositions['spike_' + spike];
+                let difficulty = vars.game.difficulty;
+                let imageHeight = vars.game.pieceHeight;
+                let pieceHeight = ~~(3*imageHeight/difficulty);
+                gV.pieceHeight = pieceHeight;
+                let pieceScaleHeight = pieceHeight/160;
+                let pieceSpacingY = vars.pieces.spacing;
+                let tempArray = Phaser.Utils.Array.NumberArray(0,difficulty-1);
+                pieceWidth=1; // normalise the width so we can change its scale
+                y=vars.game.basePieceY;
+                let pieceTints = vars.pieces.tints;
+                let pTLen = pieceTints.length-1;
+                [...tempArray].forEach((c)=> {
+                    let actualY = ~~((y - (pieceHeight*c)-(pieceHeight/2)-2 - (pieceSpacingY*c)) + 0.5);
+                    vars.pieces.yPositions.push(actualY);
+                    let colourBottom = pieceTints[pTLen - c]; // we build the stack from base up, so the colours need to do the same (or it could get confusing)
+                    let colourTop = pieceTints[pTLen - (c+1)];
+                    scene.add.image(spikeXoffset-10, actualY, 'piece').setName('piece_' + c).setScale(pieceWidth,pieceScaleHeight).setTint(colourTop,colourTop,colourBottom,colourBottom).setData({ 'id': c, 'spike': spike, 'moving': false }).setInteractive();
+                    piecePositions.push('piece_' + c);
+                    pieceWidth-=0.1;
+                })
+            }
 
-            // CREATE THE PIECES
-            let spike = gV.initialPosition;
-            let piecePositions = gV.piecePositions['spike_' + spike];
-            let difficulty = vars.game.difficulty;
-            let imageHeight = vars.game.pieceHeight;
-            let pieceHeight = ~~(3*imageHeight/difficulty);
-            gV.pieceHeight = pieceHeight;
-            let pieceScaleHeight = pieceHeight/160;
-            let pieceSpacingY = vars.pieces.spacing;
-            let tempArray = Phaser.Utils.Array.NumberArray(0,difficulty-1);
-            pieceWidth=1; // normalise the width so we can change its scale
-            y=vars.game.basePieceY;
-            let pieceTints = vars.pieces.tints;
-            let pTLen = pieceTints.length-1;
-            [...tempArray].forEach((c)=> {
-                let actualY = ~~((y - (pieceHeight*c)-(pieceHeight/2)-2 - (pieceSpacingY*c)) + 0.5);
-                vars.pieces.yPositions.push(actualY);
-                let colourBottom = pieceTints[pTLen - c]; // we build the stack from base up, so the colours need to do the same (or it could get confusing)
-                let colourTop = pieceTints[pTLen - (c+1)];
-                scene.add.image(spikeXoffset-10, actualY, 'piece').setName('piece_' + c).setScale(pieceWidth,pieceScaleHeight).setTint(colourTop,colourTop,colourBottom,colourBottom).setData({ 'id': c, 'spike': spike, 'moving': false }).setInteractive();
-                piecePositions.push('piece_' + c);
-                pieceWidth-=0.1;
+            // MOVES TAKEN
+            let offset = 5;
+            [...[810+offset,810]].forEach( (c,i)=> {
+                let alpha = 1; let colour = '#F00';
+                if (i===0) { alpha=0.5; colour='#000'; }
+                scene.add.text(1500 - (i*offset), c, 'Moves: ', { fontFamily: 'Arial', color: colour }).setStroke(0x800000, 6).setFontSize(48).setName('movesText').setAlpha(alpha);
+                scene.add.text(1700 - (i*offset), c, '0', { fontFamily: 'Arial', color: colour }).setStroke(0x800000, 6).setFontSize(48).setName('movesInt').setAlpha(alpha);
             })
 
-            scene.add.text(1500, 810, 'Moves: ').setFontSize(48).setTint(tints.black).setName('movesText');
-            scene.add.text(1700, 810, '0').setFontSize(48).setTint(tints.black).setName('movesInt');
-
+            // WINNER IMAGE
             scene.add.image(vars.canvas.cX, vars.canvas.cY + vars.canvas.cY/2, 'winner').setName('winnerImage').setAlpha(0);
 
-            // perfect score
+            // PERFECT SCORE
             scene.add.image(vars.canvas.cX, vars.canvas.cY, 'perfectScore').setName('perfectScore').setAlpha(0).setVisible(false).setScale(2);
 
-            // init fireworks particles
+            // INIT FIREWORKS PARTICLES
             vars.particles.init();
+        },
+        initNewLook: function() {
+            // build the sscale first
+            let pieceSizes = []
+            let totalPieces = vars.game.difficulty;
+            let pieceArray = Phaser.Utils.Array.NumberArray(0,totalPieces);
+            [...pieceArray].forEach( (c)=> {
+                pieceSizes.push(~~(50*(c/totalPieces)+50)/100);
+            })
+            console.log(pieceSizes);
+
+            let depths = { base: 5, spikes: 10 }
+            scene.add.image(vars.canvas.cX,820,'nl_base').setName('new_base').setDepth(depths.base);
+            spikePositionsX = vars.game.spikePositionsX;
+            [...[0,1,2]].forEach( (c)=>{
+                scene.add.image(spikePositionsX[c], 470, 'nl_spike').setDepth(depths.spikes);
+            })
         },
 
         colourTweenWinner: function() {
@@ -417,17 +453,18 @@ var vars = {
 
         welcomeMessage: function(_msg) {
             let xStart = 410; let xInc = 38;
-            let y = 950;
+            let y = 990;
             let alpha = 1;
             if (_msg.length>0) {
                 let msgArray = _msg.split('');
                 msgArray.forEach( (l, i)=> {
                     [1.0,0.8,0.6,0.4,0.2].forEach( (a)=> {
                         let x = xStart + (i*xInc);
-                        let colour = '#333';
-                        if (a<1) { colour = '#f00' }
-                        let c = scene.add.text(x,y,l, { fontStyle: 'bold', color: colour, fontSize: 64 }).setAlpha(a);
+                        let colour = '#c30';
+                        if (a<1) { colour = '#f80' }
+                        let c = scene.add.text(x,y,l, { fontStyle: 'bold', color: colour, fontSize: 64 }).setAlpha(a).setDepth(10*a);
                         scene.tweens.add({
+                            // messing about with the x var is pretty trippy eg x: x+30
                             targets: c, delay: i*17+((1-a) * 100), y: y-80, duration: 500, yoyo: true, repeat: -1, ease: 'Quad.easeInOut'
                         })
                     })

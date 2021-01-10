@@ -11,7 +11,7 @@ const consts = {
 
     tints: {
         white: 0xffffff,
-        yellow: 0xffff00, red: 0xff0000, green: 0x00ff00, blue: 0x0000ff,
+        yellow: 0xffff00, darkRed: 0x800000, red: 0xff0000, green: 0x00ff00, blue: 0x0000ff,
         black: 0x000000, greyLight: 0xbbbbbb, greyMedium: 0x888888, greyDark: 0x444444,
     }
 }
