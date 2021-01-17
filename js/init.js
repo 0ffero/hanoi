@@ -65,10 +65,10 @@ function create() {
     vars.audio.init();
     vars.localStorage.init();
 
-    if (totalTime < 2500) {
+    if (totalTime < 1000) {
         setTimeout( ()=> {
             init();
-        }, 2500-totalTime);
+        }, 1000-totalTime);
     } else {
         init();
     }
