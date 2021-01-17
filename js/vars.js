@@ -1,7 +1,7 @@
 var vars = {
     DEBUG: true,
 
-    version: 0.91,
+    version: 0.93,
 
     init: function() {
         let redInc = 1114112; let blueInc = 17; let div=2;
@@ -256,6 +256,13 @@ var vars = {
                 // empty out the spikes data
                 gV.piecePositions = { spike_1: [], spike_2: [], spike_3: [] }
 
+                // stop the restart button bouncing
+                if (vars.UI.winnerTween!==null) {
+                    vars.UI.winnerTween.stop();
+                    vars.UI.winnerTween=null;
+                    scene.children.getByName('UI_restart').setScale(0.666);
+                }
+
 
                 // UPDATE TO THE NEW DIFFICULTY
                 gV.difficulty = _lvl;
@@ -456,8 +463,8 @@ var vars = {
         init: function() {
             // OPTIONS BUTTON & RESTART BUTTONS
             let depths = consts.depths;
-            scene.add.image(1700, 980, 'restart').setName('UI_restart').setTint(0x20ff00).setScale(0.666).setDepth(depths.ui).setInteractive();
-            scene.add.image(1830, 980, 'options').setName('UI_options').setTint(0x20ff00).setDepth(depths.options+1).setInteractive();
+            scene.add.image(1700, 985, 'restart').setName('UI_restart').setTint(0x20ff00).setScale(0.666).setDepth(depths.ui).setInteractive();
+            scene.add.image(1830, 985, 'options').setName('UI_options').setTint(0x20ff00).setDepth(depths.options+1).setInteractive();
 
             // OPTIONS
             // BACKGROUND
@@ -843,6 +850,7 @@ var vars = {
 
     UI: {
         optionsVisible: false,
+        winnerTween: null,
 
 
         init: function() {
@@ -915,46 +923,6 @@ var vars = {
             })
 
             vars.pieces.nlDrawPieces();
-
-            /* // PIECES
-            // NOTE: This places the pieces at their lowest position on the spike
-            // We then call vars.pieces.nlGetYpositionForPiece() for each of the pieces
-            // which is a helper function to deal with the faux 3D of the pieces
-            let pieceSpike = gV.initialPosition;
-            let piecePositions = gV.piecePositions['spike_' + pieceSpike];
-            let x = spikePositionsX[pieceSpike-1];
-            let pieceGroups = Phaser.Utils.Array.NumberArray(0,gV.difficulty-1);
-
-            let roygbiv = consts.roygbiv;
-            roygbiv = roygbiv.slice(0,gV.difficulty).reverse();
-            let baseY = vars.game.basePieceY;
-            pieceGroups.forEach( (c,i)=> {
-                let scale = pieceSizes[c];
-                let tint = roygbiv[i];
-                // the Y position for front and back will be set after its been generated as mentioned at the top
-                let b = scene.add.image(x,0,'nl_pieceB').setName('pieceB_' + c).setDepth(depths.spikes-1).setScale(scale).setTint(tint).setInteractive().setData({ 'id': i, 'spike': pieceSpike, 'moving': false });
-                let f = scene.add.image(x,0+(66*scale),'nl_pieceF').setName('pieceF_' + c).setDepth(depths.spikes+1).setScale(scale).setTint(tint).setInteractive().setData({ 'id': i, 'spike': pieceSpike, 'moving': false });
-                let dH = f.displayHeight; // this is the actual height after scaling
-                // this and the 0.623 below are quite complex but are 
-                // ~ 0.35 y offset (based on percentage of the F sprite that centres its curve with the spike bottom y)
-                // - half the height of the piece as a percent and vice versa. they are needed because phaser places 
-                // images etc as centred (origin=0.5). Attempting to use and origin of 0 makes things even more complex (ironically)
-                let yOffset = dH*0.155; let yAbove = dH-yOffset;
-                let upperDH = dH*0.623;
-                let yF = baseY-yOffset; f.y=yF;
-                let yB = yF - upperDH; b.y=yB;
-                f.setData({ bottomOffset: yOffset, upperSize: yAbove, height: dH, minY: f.y });
-                scene.groups.pieces['piece_' + c].addMultiple([b,f]);
-                piecePositions.push('piece_' + c);
-            })
-
-            console.log('%cPlacing the pieces in the proper positions...', consts.console.important);
-            pieceArray.splice(0,1);
-            let pV = vars.pieces;
-            pieceArray.forEach( (c)=>{ pV.nlGetYpositionForPiece(c); })
-            pV.backSetOffsets();
-            console.log('%c...COMPLETE.', consts.console.important); */
-
             vars.UI.initOthers(true);
         },
         initOthers: function(_nl=false) {
@@ -1045,6 +1013,17 @@ var vars = {
                 vars.UI.showPerf();
             }
             vars.particles.fireworksEnable();
+
+            // bounce the restart button to make it obvious how you start a new game.
+            let a = scene.children.getByName('UI_restart');
+            vars.UI.winnerTween = scene.tweens.add({
+                targets: a,
+                scale: 1,
+                duration: 2000,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Bounce.easeIn'
+            })
         }
 
     }
