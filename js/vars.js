@@ -1,7 +1,7 @@
 var vars = {
     DEBUG: true,
 
-    version: 0.93,
+    version: 0.99,
 
     init: function() {
         let redInc = 1114112; let blueInc = 17; let div=2;
