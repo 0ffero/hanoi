@@ -13,9 +13,22 @@ const consts = {
 
     roygbiv: [ 0xff0000, 0xff8000, 0xffff00, 0x00ff00, 0x0000ff, 0x49007E, 0x8B00F7 ],
 
+    text: {
+        default: { fontFamily: 'Arial' }
+    },
+
     tints: {
         white: 0xffffff,
         yellow: 0xffff00, darkRed: 0x800000, red: 0xff0000, green: 0x00ff00, blue: 0x0000ff,
         black: 0x000000, greyLight: 0xbbbbbb, greyMedium: 0x888888, greyDark: 0x444444,
+    },
+
+    tintsToHTML: function(_tint='') {
+        if (_tint!=='' && typeof consts.tints[_tint]!=='undefined') {
+            return '#' + consts.tints[_tint].toString(16);
+        } else {
+            console.log('ERROR: Tint "' + _tint + '" not found!');
+            return false;
+        }
     }
 }

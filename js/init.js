@@ -61,9 +61,9 @@ function create() {
     let totalTime = endTime - startTime; startTime=undefined;
     // INITIALISE VARIABLES, OBJECTS & ARRAYS
     vars.init();
+    vars.localStorage.init();
     vars.groups.init();
     vars.audio.init();
-    vars.localStorage.init();
 
     if (totalTime < 2500) { setTimeout( ()=> { init(); }, 2500-totalTime); } else { init(); }
 }
@@ -73,15 +73,11 @@ function create() {
 
 function init() {
     let li = scene.children.getByName('loadingImage');
-    scene.tweens.add({
-        targets: li,
-        alpha: 0,
-        duration: 500
-    })
-    // DRAW GAME BOARD
-    // INPUT
-    vars.input.init();
+    scene.tweens.add({ targets: li, alpha: 0, duration: 500 })
     // UI
     vars.UI.init();
+    // DRAW GAME PIECES
     vars.game.init();
+    // INPUT
+    vars.input.init();
 }

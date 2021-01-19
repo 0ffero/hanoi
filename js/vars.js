@@ -105,7 +105,7 @@ var vars = {
     localStorage: {
         init: function() {
             let lS = window.localStorage;
-            if (lS.hanoi_scores===undefined) { 
+            if (lS.hanoi_scores===undefined) {
                 lS.hanoi_scores = '3:9999;4:9999;5:9999;6:9999;7:9999';
             } else {
                 let pScores = vars.player.scores;
@@ -115,11 +115,22 @@ var vars = {
                     pScores[scores[0]] = parseInt(scores[1]);
                 })
             }
+
+            if (lS.hanoi_difficulty===undefined) {
+                lS.hanoi_difficulty=3; vars.game.difficulty=3;
+            } else {
+                vars.game.difficulty = ~~(lS.hanoi_difficulty);
+            }
         },
-    
+
         resetScores: function() {
             let lS = window.localStorage;
             lS.hanoi_scores = '3:9999;4:9999;5:9999;6:9999;7:9999';
+        },
+
+        saveDifficulty: function(_difficulty) {
+            let lS = window.localStorage;
+            lS.hanoi_difficulty=_difficulty;
         },
 
         saveScores: function() {
@@ -173,6 +184,17 @@ var vars = {
 
         init: function() {
             
+        },
+
+        bestScoreForDifficultyCheck: function(_difficulty,_pMoves) {
+            console.log('Checking for high score.');
+            let bestScore = vars.player.scores[_difficulty];
+            if (_pMoves<bestScore) {
+                vars.player.scores[_difficulty]=_pMoves;
+                vars.UI.bestScoreUpdate();
+                return true;
+            }
+            return false;
         },
 
         checkForWin() {
@@ -269,6 +291,8 @@ var vars = {
 
 
                 // BEGIN GAME
+                // first update the best score and difficulty text
+                vars.UI.bestScoreUpdate();
                 // First, build the sizes of each piece
                 vars.pieces.nlSetPieceSizes();
                 // build the new groups for the pieces
@@ -289,6 +313,7 @@ var vars = {
 
         setDifficulty: function(_lvl) {
             if (_lvl !== vars.game.difficulty) {
+                vars.localStorage.saveDifficulty(_lvl);
                 console.clear();
                 console.log('%cDifferent difficulty level selected\n\nSetting difficulty and restarting the game.', consts.console.important);
                 vars.game.restart(true, _lvl);
@@ -937,14 +962,21 @@ var vars = {
                 let alpha = 1; let colour = '#F00';
                 let ext = '';
                 if (i===0) { alpha=0.5; colour='#000'; ext = '_S' }
-                scene.add.text(1500 - (i*offset), c, 'Moves: ', { fontFamily: 'Arial', color: colour }).setStroke(0x800000, 6).setFontSize(48).setName('movesText' + ext).setAlpha(alpha).setDepth(depth);
-                scene.add.text(1700 - (i*offset), c, '0', { fontFamily: 'Arial', color: colour }).setStroke(0x800000, 6).setFontSize(48).setName('movesInt' + ext).setAlpha(alpha).setDepth(depth);
+                let textCSS = Object.assign({}, consts.text.default); // shallow copy
+                textCSS.color = colour;
+                let strokeC = consts.tints.darkRed;
+                scene.add.text(1500 - (i*offset), c, 'Moves: ', textCSS).setStroke(strokeC, 6).setFontSize(48).setName('movesText' + ext).setAlpha(alpha).setDepth(depth);
+                scene.add.text(1700 - (i*offset), c, '0', textCSS).setStroke(strokeC, 6).setFontSize(48).setName('movesInt' + ext).setAlpha(alpha).setDepth(depth);
             })
 
             // WINNER IMAGE
-            let wI = scene.add.image(vars.canvas.cX, vars.canvas.cY + vars.canvas.cY/2, 'winner').setName('winnerImage').setAlpha(0).setDepth(depthWinner);
+            let cX = vars.canvas.cX;
+            let cY = vars.canvas.cY;
+            let wI = scene.add.image(cX, cY + cY/2, 'winner').setName('winnerImage').setAlpha(0).setDepth(depthWinner);
             scene.groups.winnerUI.add(wI);
 
+            // DIFFICULTY AND BEST SCORE
+            vars.UI.bestScoreForDifficulty();
 
             // PERFECT SCORE
             let pS = scene.add.image(vars.canvas.cX, vars.canvas.cY, 'perfectScore').setName('perfectScore').setAlpha(0).setVisible(false).setScale(2).setDepth(depthWinner+1);
@@ -956,6 +988,19 @@ var vars = {
             // OPTIONS SCREEN
             vars.options.init();
 
+        },
+
+        bestScoreForDifficulty: function() { // This function shows the players best score for this difficulty as well as the current difficulty level
+            let difficulty = vars.game.difficulty;
+            let strokeC = consts.tints.darkRed;
+            scene.add.text(1370,40,'Current Difficulty: '.toUpperCase() + difficulty + '\nBest Score: '.toUpperCase() + vars.player.scores[difficulty], { color: consts.tintsToHTML('yellow') }).setStroke(strokeC, 6).setFontSize(40).setAlign('right').setName('difficultyTxt');
+        },
+
+        bestScoreUpdate: function() {
+            let difficulty = vars.game.difficulty;
+            let t = scene.children.getByName('difficultyTxt');
+            let msg = 'Current Difficulty: '.toUpperCase() + difficulty + '\nBest Score: '.toUpperCase() + vars.player.scores[difficulty]
+            t.setText(msg);
         },
 
         colourTweenWinner: function() {
@@ -984,7 +1029,6 @@ var vars = {
         welcomeMessage: function(_msg) {
             let xStart = 410; let xInc = 38;
             let y = 990;
-            let alpha = 1;
             if (_msg.length>0) {
                 let msgArray = _msg.split('');
                 msgArray.forEach( (l, i)=> {
@@ -1005,9 +1049,18 @@ var vars = {
         winner: function() {
             let c = scene.children.getByName('winnerImage');
             scene.tweens.add({ targets: c, y: vars.canvas.cY, duration: 2000, alpha: 1 })
+            
+            // is this score better than the current high score?
+            let pV = vars.player;
+            let gV = vars.game;
+            let difficulty = gV.difficulty;
+            let pMoves = pV.moves;
+            if (gV.bestScoreForDifficultyCheck(difficulty,pMoves)===true) {
+                vars.localStorage.saveScores();
+            }
 
-            let best = Math.pow(2,vars.game.difficulty)-1;
-            if (vars.player.moves===best) {
+            let perfectGame = Math.pow(2,difficulty)-1;
+            if (pMoves===perfectGame) {
                 // colour cycle the win image
                 vars.UI.colourTweenWinner();
                 vars.UI.showPerf();
@@ -1016,14 +1069,7 @@ var vars = {
 
             // bounce the restart button to make it obvious how you start a new game.
             let a = scene.children.getByName('UI_restart');
-            vars.UI.winnerTween = scene.tweens.add({
-                targets: a,
-                scale: 1,
-                duration: 2000,
-                yoyo: true,
-                repeat: -1,
-                ease: 'Bounce.easeIn'
-            })
+            vars.UI.winnerTween = scene.tweens.add({ targets: a, scale: 1, duration: 2000, yoyo: true, repeat: -1, ease: 'Bounce.easeIn' })
         }
 
     }
