@@ -11,6 +11,10 @@ const consts = {
         options: 100, winUI: 80, ui: 70, piece: 20, spikes: 15, base: 10
     },
 
+    durations: {
+        pieceMove: 150
+    },
+
     roygbiv: [ 0xff0000, 0xff8000, 0xffff00, 0x00ff00, 0x0000ff, 0x49007E, 0x8B00F7 ],
 
     text: {

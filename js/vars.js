@@ -1,3 +1,9 @@
+function update() {
+    if (scene.children.getByName('timerInt')!==null && vars.game.timer.totalTime===-1 && vars.game.firstMove===false) {
+        vars.game.timer.update();
+    }
+}
+
 var vars = {
     DEBUG: true,
 
@@ -27,12 +33,6 @@ var vars = {
                 }
             })
         }
-    },
-
-    durations: {
-        pieceMoveUpMax     : 250,
-        pieceMoveAcrossMax : 250,
-        pieceMoveDownMax   : 250
     },
 
     files: {
@@ -116,10 +116,28 @@ var vars = {
                 })
             }
 
+            let gV = vars.game;
             if (lS.hanoi_difficulty===undefined) {
-                lS.hanoi_difficulty=3; vars.game.difficulty=3;
+                lS.hanoi_difficulty=3; gV.difficulty=3;
             } else {
-                vars.game.difficulty = ~~(lS.hanoi_difficulty);
+                gV.difficulty = ~~(lS.hanoi_difficulty);
+            }
+
+            if (lS.hanoi_times===undefined) {
+                let levels = Phaser.Utils.Array.NumberArray(3,7);
+                let times = 3600;
+                let timesObject = { }
+                levels.forEach( (c)=> {
+                    [0,1,2].forEach( (s)=> {
+                        if (s===0) { timesObject[c] = []; }
+                        timesObject[c].push(times);
+                    })
+                })
+                gV.timer.bestTimes = timesObject;
+                let timeString = JSON.stringify(timesObject);
+                lS.hanoi_times = timeString;
+            } else {
+                gV.timer.bestTimes = JSON.parse(lS.hanoi_times);
             }
         },
 
@@ -138,6 +156,27 @@ var vars = {
             let scoreStr = '';
             [3,4,5,6,7].forEach( (c)=> { scoreStr += c.toString() + ':' + scores[c] + ';'; })
             lS.hanoi_scores = scoreStr;
+        },
+
+        saveTime: function() {
+            let lS = window.localStorage;
+            let gV = vars.game;
+            let newTime = gV.timer.totalTime;
+            vars.UI.timeUpdate(null,newTime);
+            let difficulty = gV.difficulty;
+            let times = gV.timer.bestTimes[difficulty];
+            let timeIsGood = false;
+            times.forEach( (c, i)=>{
+                if (timeIsGood===false) {
+                    if (newTime<c) {
+                        console.log(`Players time ${newTime} is a best time. Saving. It will be placed in position ${i}`);
+                        timeIsGood=true;
+                        times.splice(i,0,newTime); times.pop();
+                        lS.hanoi_times = JSON.stringify(gV.timer.bestTimes);
+                        vars.UI.bestTimesUpdate();
+                    }
+                }
+            })
         }
     },
 
@@ -173,6 +212,7 @@ var vars = {
         difficultyLevels: [3,4,5,6,7], // basically the piece count
         difficulty: 3,
         difficultyMax: 7,
+        firstMove: true,
         initialPosition: 1,
         liftedPiece: -1,
         pieceHeight: 160,
@@ -202,7 +242,8 @@ var vars = {
             [1,2,3].forEach( (c)=>{
                 if (gV.piecePositions['spike_' + c].length===gV.difficulty) {
                     if (c!==gV.initialPosition) { // win found
-                        vars.game.winner();
+                        gV.timer.end(); // end the timer
+                        gV.winner();
                     }
                 }
             })
@@ -252,6 +293,7 @@ var vars = {
                 _lvl=gV.difficulty;
             }
             if (_lvl>=3 && _lvl<=7) {
+                vars.game.firstMove = true;
                 // RE-INIT ALL THE THINGS
                 // reset the moves
                 vars.player.moves=0;
@@ -306,6 +348,7 @@ var vars = {
                     console.log('Initialising the pieces for the old look');
                     vars.pieces.drawPieces();
                 }
+                gV.timer.reset();
             } else {
                 console.error('An invalid difficulty was selected!');
             }
@@ -333,6 +376,37 @@ var vars = {
             }
         },
 
+        timer: {
+            bestTimes: -1,
+            startTime: -1,
+            totalTime: -1,
+            end: function() { // this function ends the timer, but also checks if the new time is better than the old one
+                // get the time taken to win
+                let endTime = new Date();
+                let tV = vars.game.timer;
+                tV.totalTime = (endTime - tV.startTime)/1000;
+                tV.startTime=-1;
+                vars.localStorage.saveTime();
+            },
+
+            reset: function() {
+                scene.children.getByName('timerInt').setText('0');
+                scene.children.getByName('timerInt_S').setText('0');
+            },
+
+            start: function() {
+                let tV = vars.game.timer;
+                tV.totalTime = -1;
+                tV.startTime = new Date();
+            },
+
+            update: function() {
+                let currentTime = new Date();
+                vars.UI.timeUpdate(currentTime - vars.game.timer.startTime);
+            }
+
+        },
+
         winner: function(){
             vars.UI.winner();
         }
@@ -340,20 +414,22 @@ var vars = {
     },
 
     input: {
+        pieceMoving: false,
         init: function() {
             scene.input.on('gameobjectdown', function (pointer, object) {
                 if (vars.UI.optionsVisible===false) {
+                    let gV = vars.game; let pV = vars.pieces;
                     // PLAYER IS PLAYING THE GAME
                     if (object.name.includes('piece_') || object.name.includes('spike_')) {
                         vars.input.moveRequest(object.name);
                     } else if (object.name.includes('pieceF_') || object.name.includes('pieceB_') || object.name.includes('spikeNL_')) {
-                        let gV = vars.game; let pV = vars.pieces;
                         if (gV.liftedPiece===-1) {
+                            if (gV.firstMove===true) { gV.firstMove=false; gV.timer.start(); }
                             console.log(`Lifting piece with name: ${object.name}`);
-                            pV.liftPieceNL(object.name);
+                            pV.nlLiftPiece(object.name);
                         } else { // dropping the current piece
                             console.log('%cDropping Piece', consts.console.importantish);
-                            vars.pieces.dropPieceNL(object);
+                            pV.nlDropPiece(object);
                         }
                     } else {
                         if (object.name==='UI_options') {
@@ -363,6 +439,11 @@ var vars = {
                             console.clear();
                             console.log('Restarting the game');
                             vars.game.restart(false);
+                        } else if (object.name==='background' && gV.liftedPiece!==-1 && gV.spikeOver!==-1) {
+                            console.log('%cDropping Piece', consts.console.importantish);
+                            // figure out what piece
+                            let piece = scene.children.getByName(gV.liftedPiece.replace('piece_','pieceF_'));
+                            pV.nlDropPiece(piece);
                         } else {
                             console.error(`UNKNOWN PIECE with name: ${object.name} (clicked)`);
                         }
@@ -388,7 +469,12 @@ var vars = {
                         vars.input.hoverRequest(object.name);
                     } else if (gV.liftedPiece!==-1 && object.name.includes('spikeNL_')) {
                         console.log('Found hovering piece. Dealing with spike over');
-                        vars.pieces.hoverRequestNL(object);
+                        vars.pieces.nlHoverRequest(object);
+                    } else  if (gV.liftedPiece!==-1 && object.name.includes('piece')) {
+                        console.log('Found hovering piece. Dealing with piece over');
+                        let spikeID = object.getData('spike');
+                        console.log(`Piece is currently on spike: ${spikeID}`);
+                        //vars.pieces.nlHoverRequest('spikeNL_' + object);
                     } else {
                         // This fires so often ive disabled it
                         // its the hover over, but its only needed
@@ -401,12 +487,19 @@ var vars = {
 
         },
 
+
+        disable: function() {
+            console.log('%cStopped all input.', consts.console.important);
+            scene.input.enabled=false;
+        },
+
         dropPiece: function() {
             let gV = vars.game;
             let liftedPiece = gV.liftedPiece;
             let spike = gV.spikeOver;
             let spikeData = gV.piecePositions[spike];
             let pieceObject = scene.children.getByName(liftedPiece);
+            let duration = consts.durations.pieceMove;
 
             if (vars.input.isMoveValid(spike,spikeData,parseInt(liftedPiece.replace('piece_','')))) {
                 let spikeID = parseInt(spike.replace('spike_', ''));
@@ -416,12 +509,17 @@ var vars = {
                 gV.piecePositions[spike].push(liftedPiece);
                 gV.clearPickUpVars();
 
-                scene.tweens.add({ targets: pieceObject, y: yOffset, duration: 250 })
+                scene.tweens.add({ targets: pieceObject, y: yOffset, duration: duration })
                 scene.sound.play('dropPiece');
                 vars.game.checkForWin();
             } else {
-                scene.tweens.add({ targets: pieceObject, y: pieceObject.y+50, yoyo: true, duration: 250 })
+                scene.tweens.add({ targets: pieceObject, y: pieceObject.y+50, yoyo: true, duration: duration })
             }
+        },
+
+        enable: function() {
+            scene.input.enabled=true;
+            console.log('%cInput enabled again.', consts.console.important);
         },
 
         getSpikeIDfromPiece: function(_pieceName) {
@@ -430,10 +528,11 @@ var vars = {
 
         hoverRequest: function(_spikeName) {
             console.log(`Moving hovering piece to be above ${_spikeName}`);
+            let duration = consts.durations.pieceMove;
             vars.game.spikeOver = _spikeName;
             let piece = scene.children.getByName(vars.game.liftedPiece);
             let spikeX = scene.children.getByName(_spikeName).x;
-            scene.tweens.add({ targets: piece, x: spikeX, duration: 250 })
+            scene.tweens.add({ targets: piece, x: spikeX, duration: duration })
         },
 
         isMoveValid: function(_spike, _spikeData, _liftedPiece) {
@@ -470,7 +569,8 @@ var vars = {
             let object = scene.children.getByName(piece);
             vars.game.spikeFrom = spikeNum;
             object.setData('moving', true);
-            scene.tweens.add({ targets: object, y: 100, duration: 250 })
+            let duration = consts.durations.pieceMove;
+            scene.tweens.add({ targets: object, y: 100, duration: duration })
             scene.sound.play('liftPiece');
         },
 
@@ -580,7 +680,6 @@ var vars = {
         yPositions: [],
         yOffsets: [],
 
-        // HELPER FUNCTIONS
         backSetOffsets: function() {
             let gV = vars.game;
             Phaser.Utils.Array.NumberArray(0,gV.difficulty-1).forEach( (c)=> {
@@ -601,15 +700,6 @@ var vars = {
                 return stack;
             } else {
                 console.error('The spike ID must be an integer');
-                return false;
-            }
-        },
-
-        isMoveValidNL: function(lowerPieceID, ourPieceID) {
-            if (vars.DEBUG && vars.VERBOSE) { console.log('Checking if this move is valid. Currently returns true. This function has been simplified to a single line as weve already done all the hard work. Its a remnant from the old piece code.'); }
-            if (lowerPieceID<ourPieceID) {
-                return true;
-            } else {
                 return false;
             }
         },
@@ -656,6 +746,46 @@ var vars = {
             console.log('%c...COMPLETE.', consts.console.important);
         },
 
+        nlDropPiece: function(object) {
+            let gV = vars.game; let pV = vars.pieces;
+            let liftedPieceID = ~~(gV.liftedPiece.replace('piece_',''));
+            if (object.name.includes('spike')) {
+                console.log(`Dropping piece with name: ${gV.liftedPiece} on spike: ${object.name}`);
+                let spikeID = ~~(object.name.replace('spikeNL_',''));
+                pV.nlGetYpositionForPiece(liftedPieceID,spikeID);
+            } else {
+                console.log('User clicked a piece... checking if its the floating piece');
+                let pieceName = object.name;
+                let pieceID=-1;
+                if (pieceName.includes('F')) {
+                    console.log('They clicked on the front of a piece');
+                    pieceID = ~~(pieceName.replace('pieceF_',''));
+                } else {
+                    pieceID = ~~(pieceName.replace('pieceB_',''));
+                }
+                if (liftedPieceID===pieceID) { // it is the lifted piece
+                    console.log('Dropping piece on to spike with name ' + gV.spikeOver);
+                    let spikeID = ~~(gV.spikeOver.replace('spikeNL_',''));
+                    pV.nlGetYpositionForPiece(liftedPieceID,spikeID);
+                } else {
+                    let spikeID = vars.input.getSpikeIDfromPiece(object.name)
+                    console.log(spikeID);
+                    pV.nlGetYpositionForPiece(liftedPieceID,spikeID);
+                    return true;
+                }
+            }
+        },
+
+        nlDropPieceReset: function(_f,_b,_spikeID) {
+            if (Number.isInteger(_spikeID) && _spikeID!==-1) {
+                _f.setData({ moving: false, spike: _spikeID });
+                _b.setData({ moving: false, spike: _spikeID });
+            } else {
+                console.log(`Error: Invalid Spike ID (${_spikeID})`);
+                return false;
+            }
+        },
+
         nlGetFloatingPieceNames: function() { // deals with floating piece
             // CHANGES THE OLD LOOK NAME TO NEW LOOK NAME
             let piece = vars.game.liftedPiece;
@@ -684,6 +814,7 @@ var vars = {
                     let stack = pV.getStack(_spikeID);
                     let gV = vars.game;
                     let valid = false;
+                    let duration = consts.durations.pieceMove;
                     if (stack.length===0) {
                         // this is the bottom piece for this spike, no calculation needed
                         // THIS IS ALWAYS VALID (as we're dropping the piece on to an empty spike)
@@ -693,10 +824,10 @@ var vars = {
                         let frontNewY = f.getData('minY');
                         let backOffset = b.getData('frontOffset');
                         // animate the piece
-                        scene.tweens.add({ targets: f, y: frontNewY, duration: 250 })
-                        scene.tweens.add({ targets: b, y: (frontNewY-backOffset), duration: 250 })
+                        scene.tweens.add({ targets: f, y: frontNewY, duration: duration })
+                        scene.tweens.add({ targets: b, y: (frontNewY-backOffset), duration: duration })
                         gV.piecePositions['spike_' + _spikeID].push('piece_' + _pieceID);
-                        pV.dropPieceNLReset(f,b,_spikeID);
+                        pV.nlDropPieceReset(f,b,_spikeID);
                         gV.clearPickUpVars();
                         valid = true;
                     } else {
@@ -709,24 +840,24 @@ var vars = {
                         let b1 = scene.children.getByName('pieceB_' + _pieceID);
 
                         // check if this move is valid
-                        if (pV.isMoveValidNL(lowerPieceID, _pieceID, _spikeID)) {
+                        if (pV.nlIsMoveValid(lowerPieceID, _pieceID, _spikeID)) {
                             let frontNewY = f0.y - ~~(f0.getData('upperSize')) + ~~(f1.getData('bottomOffset')) + f1.getData('bottomOffset');
                             let backOffset = b1.getData('frontOffset');
 
                             // we need to animate this pieces position
-                            scene.tweens.add({ targets: f1, y: frontNewY, duration: 250 })
-                            scene.tweens.add({ targets: b1, y: (frontNewY-backOffset), duration: 250 })
+                            scene.tweens.add({ targets: f1, y: frontNewY, duration: duration })
+                            scene.tweens.add({ targets: b1, y: (frontNewY-backOffset), duration: duration })
 
                             // then we reset all the things...
                             gV.piecePositions['spike_' + _spikeID].push('piece_' + _pieceID);
-                            pV.dropPieceNLReset(f1,b1,_spikeID);
+                            pV.nlDropPieceReset(f1,b1,_spikeID);
                             gV.clearPickUpVars();
                             valid = true;
                         } else {
                             console.log('%cThis move is invalid!', consts.console.importantish);
                             // make the floating piece do a cute little bounce
-                            scene.tweens.add({ targets: f1, y: f1.y+100, duration: 150, yoyo: true })
-                            scene.tweens.add({ targets: b1, y: b1.y+100, duration: 150, yoyo: true })
+                            scene.tweens.add({ targets: f1, y: f1.y+100, duration: duration, yoyo: true })
+                            scene.tweens.add({ targets: b1, y: b1.y+100, duration: duration, yoyo: true })
                             return false;
                         }
                     }
@@ -740,6 +871,66 @@ var vars = {
             } else {
                 console.error('Piece ID must be numeric!');
                 return false;
+            }
+        },
+
+        nlHoverRequest: function(_object) {
+            let gV = vars.game;
+            if (_object.name!==gV.spikeOver) {
+                // get the x position of this spike
+                let spikeX = _object.x;
+                gV.spikeOver = _object.name;
+                let duration = consts.durations.pieceMove;
+                let pieces = vars.pieces.nlGetFloatingPieceNames();
+                let f = scene.children.getByName(pieces[0]);
+                let b = scene.children.getByName(pieces[1]);
+                scene.tweens.add({ targets: f, x: spikeX, duration: duration })
+                scene.tweens.add({ targets: b, x: spikeX, duration: duration })
+            }
+        },
+
+        nlIsMoveValid: function(lowerPieceID, ourPieceID) {
+            if (vars.DEBUG && vars.VERBOSE) { console.log('Checking if this move is valid. Currently returns true. This function has been simplified to a single line as weve already done all the hard work. Its a remnant from the old piece code.'); }
+            if (lowerPieceID<ourPieceID) {
+                return true;
+            } else {
+                return false;
+            }
+        },
+
+        nlLiftPiece: function(_pieceName) {
+            let gV = vars.game;
+            if (gV.spikeFrom===-1) {
+                let piece = _pieceName;
+                let spikeNum = -1;
+                if (_pieceName.includes('spikeNL_')) {
+                    console.log('Find the top piece on this spike');
+                    spikeNum = piece.replace('spikeNL_','');
+                    let spikeData = gV.piecePositions['spike_' + spikeNum];
+                    piece  = spikeData.pop();
+                } else { // we need to check that the piece clicked on is at the top of the spike
+                    // grab the top piece
+                    console.log('Finding the top piece, in case the clicked on piece isnt it.');
+                    spikeNum = vars.input.getSpikeIDfromPiece(piece);
+                    let spikeData = gV.piecePositions['spike_' + spikeNum];
+                    piece  = spikeData.pop();
+                }
+                gV.spikeFrom = spikeNum;
+
+                let toY = 250;
+                console.log('Lifting pieces F and B for: ' + piece);
+                gV.liftedPiece = piece;
+                let pieceNames = vars.pieces.nlGetFloatingPieceNames();
+                let f = scene.children.getByName(pieceNames[0]);
+                let b = scene.children.getByName(pieceNames[1]);
+
+                f.setData('moving', true); b.setData('moving', true);
+
+                let offsetY = f.y-toY;
+                let duration = consts.durations.pieceMove;
+                scene.tweens.add({ targets: f, y: f.y-offsetY, duration: duration })
+                scene.tweens.add({ targets: b, y: b.y-offsetY, duration: duration })
+                scene.sound.play('liftPiece');
             }
         },
 
@@ -764,93 +955,6 @@ var vars = {
 
                 console.log(`%cFRONT: name: ${f.name} y: ${f.y} (minY: ${f.getData('minY')}) ${f.getData('bottomOffset')} ${f.getData('upperSize')}`, consts.console.info);
                 console.log(`%cBACK: yDiff: ${b.getData('yDiff')} Front Offset: ${b.getData('frontOffset')}`, consts.console.info);
-            }
-        },
-        // END OF HELPERS
-
-        dropPieceNL: function(object) {
-            let gV = vars.game; let pV = vars.pieces;
-            let liftedPieceID = ~~(gV.liftedPiece.replace('piece_',''));
-            if (object.name.includes('spike')) {
-                console.log(`Dropping piece with name: ${gV.liftedPiece} on spike: ${object.name}`);
-                let spikeID = ~~(object.name.replace('spikeNL_',''));
-                pV.nlGetYpositionForPiece(liftedPieceID,spikeID);
-            } else {
-                console.log('User clicked a piece... checking if its the floating piece');
-                let pieceName = object.name;
-                let pieceID=-1;
-                if (pieceName.includes('F')) {
-                    console.log('They clicked on the front of a piece');
-                    pieceID = ~~(pieceName.replace('pieceF_',''));
-                } else {
-                    pieceID = ~~(pieceName.replace('pieceB_',''));
-                }
-                if (liftedPieceID===pieceID) { // it is the lifted piece
-                    console.log('Dropping piece on to spike with name ' + gV.spikeOver);
-                    let spikeID = ~~(gV.spikeOver.replace('spikeNL_',''));
-                    pV.nlGetYpositionForPiece(liftedPieceID,spikeID);
-                } else {
-                    console.log('%cIm currently returning false here but we need to check if theyve clicked on a piece on the spike they want to drop th current piece on top of.', consts.console.likeReallyImportant);
-                    return false;
-                }
-            }
-        },
-
-        dropPieceNLReset: function(_f,_b,_spikeID) {
-            if (Number.isInteger(_spikeID) && _spikeID!==-1) {
-                _f.setData({ moving: false, spike: _spikeID });
-                _b.setData({ moving: false, spike: _spikeID });
-            } else {
-                console.log(`Error: Invalid Spike ID (${_spikeID})`);
-                return false;
-            }
-        },
-
-        hoverRequestNL: function(_object) {
-            let gV = vars.game;
-            if (_object.name!==gV.spikeOver) {
-                // get the x position of this spike
-                let spikeX = _object.x;
-                gV.spikeOver = _object.name;
-                let pieces = vars.pieces.nlGetFloatingPieceNames();
-                let f = scene.children.getByName(pieces[0]);
-                let b = scene.children.getByName(pieces[1]);
-                scene.tweens.add({ targets: f, x: spikeX, duration: 250 })
-                scene.tweens.add({ targets: b, x: spikeX, duration: 250 })
-            }
-        },
-
-        liftPieceNL: function(_pieceName) {
-            if (vars.game.spikeFrom===-1) {
-                let piece = _pieceName;
-                let spikeNum = -1;
-                if (_pieceName.includes('spikeNL_')) {
-                    console.log('Find the top piece on this spike');
-                    spikeNum = piece.replace('spikeNL_','');
-                    let spikeData = vars.game.piecePositions['spike_' + spikeNum];
-                    piece  = spikeData.pop();
-                } else { // we need to check that the piece clicked on is at the top of the spike
-                    // grab the top piece
-                    console.log('Finding the top piece, in case the clicked on piece isnt it.');
-                    spikeNum = vars.input.getSpikeIDfromPiece(piece);
-                    let spikeData = vars.game.piecePositions['spike_' + spikeNum];
-                    piece  = spikeData.pop();
-                }
-                vars.game.spikeFrom = spikeNum;
-
-                let toY = 250;
-                console.log('Lifting pieces F and B for: ' + piece);
-                vars.game.liftedPiece = piece;
-                let pieceNames = vars.pieces.nlGetFloatingPieceNames();
-                let f = scene.children.getByName(pieceNames[0]);
-                let b = scene.children.getByName(pieceNames[1]);
-
-                f.setData('moving', true); b.setData('moving', true);
-
-                let offsetY = f.y-toY;
-                scene.tweens.add({ targets: f, y: f.y-offsetY, duration: 250 })
-                scene.tweens.add({ targets: b, y: b.y-offsetY, duration: 250 })
-                scene.sound.play('liftPiece');
             }
         },
 
@@ -881,7 +985,7 @@ var vars = {
         init: function() {
             let gV = vars.game;
             // BACKGROUND
-            scene.add.image(vars.canvas.cX, vars.canvas.cY, 'background');
+            scene.add.image(vars.canvas.cX, vars.canvas.cY, 'background').setName('background').setInteractive();
             // WELCOME TEXT
             let tints  = consts.tints;
             let depths = consts.depths;
@@ -967,6 +1071,8 @@ var vars = {
                 let strokeC = consts.tints.darkRed;
                 scene.add.text(1500 - (i*offset), c, 'Moves: ', textCSS).setStroke(strokeC, 6).setFontSize(48).setName('movesText' + ext).setAlpha(alpha).setDepth(depth);
                 scene.add.text(1700 - (i*offset), c, '0', textCSS).setStroke(strokeC, 6).setFontSize(48).setName('movesInt' + ext).setAlpha(alpha).setDepth(depth);
+                scene.add.text(200 - (i*offset), c, 'Current Time: ', textCSS).setStroke(strokeC, 6).setFontSize(48).setName('timerText' + ext).setAlpha(alpha).setDepth(depth);
+                scene.add.text(530 - (i*offset), c, '0', textCSS).setStroke(strokeC, 6).setFontSize(48).setName('timerInt' + ext).setAlpha(alpha).setDepth(depth);
             })
 
             // WINNER IMAGE
@@ -977,6 +1083,7 @@ var vars = {
 
             // DIFFICULTY AND BEST SCORE
             vars.UI.bestScoreForDifficulty();
+            vars.UI.bestTimesInit();
 
             // PERFECT SCORE
             let pS = scene.add.image(vars.canvas.cX, vars.canvas.cY, 'perfectScore').setName('perfectScore').setAlpha(0).setVisible(false).setScale(2).setDepth(depthWinner+1);
@@ -988,6 +1095,7 @@ var vars = {
             // OPTIONS SCREEN
             vars.options.init();
 
+            vars.game.timer.start();
         },
 
         bestScoreForDifficulty: function() { // This function shows the players best score for this difficulty as well as the current difficulty level
@@ -1001,6 +1109,33 @@ var vars = {
             let t = scene.children.getByName('difficultyTxt');
             let msg = 'Current Difficulty: '.toUpperCase() + difficulty + '\nBest Score: '.toUpperCase() + vars.player.scores[difficulty]
             t.setText(msg);
+        },
+
+        bestTimesInit: function() {
+            let gV = vars.game;
+            let difficulty = gV.difficulty;
+            let times = gV.timer.bestTimes[difficulty];
+            let timesText = 'Best Times\n';
+            times.forEach( (c)=> {
+                if (c!=3600) { // valid user time
+                    timesText += c + 's\n';
+                }
+            })
+            scene.add.text(1680, 140, timesText, { color: consts.tintsToHTML('yellow') }).setStroke(0x0, 6).setFontSize(32).setAlign('right').setName('bestTimesText');
+        },
+
+        bestTimesUpdate: function() {
+            let gV = vars.game;
+            let difficulty = gV.difficulty;
+            let textObject = scene.children.getByName('bestTimesText');
+            let times = gV.timer.bestTimes[difficulty];
+            let timesText = 'Best Times\n';
+            times.forEach( (c)=> {
+                if (c!=3600) { // valid user time
+                    timesText += c + 's\n';
+                }
+            })
+            textObject.setText(timesText);
         },
 
         colourTweenWinner: function() {
@@ -1019,6 +1154,12 @@ var vars = {
             p.setVisible(true);
             scene.tweens.add({ targets: p, delay: 2500, scale: 1, duration: 500, ease: 'Cubic.easeIn', onComplete: vars.audio.perfectScore })
             scene.tweens.add({ targets: p, delay: 2500, alpha: 1, duration: 100 })
+        },
+
+        timeUpdate: function(_delta,_newTime) {
+            if (_delta===null) { _delta = _newTime*1000; }
+            scene.children.getByName('timerInt').setText((_delta/1000).toFixed(3));
+            scene.children.getByName('timerInt_S').setText((_delta/1000).toFixed(3));
         },
 
         updateMoveCount: function() {
