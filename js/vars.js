@@ -7,7 +7,7 @@ function update() {
 var vars = {
     DEBUG: true,
 
-    version: 0.99,
+    version: 0.994,
 
     init: function() {
         let redInc = 1114112; let blueInc = 17; let div=2;
@@ -471,10 +471,13 @@ var vars = {
                         console.log('Found hovering piece. Dealing with spike over');
                         vars.pieces.nlHoverRequest(object);
                     } else  if (gV.liftedPiece!==-1 && object.name.includes('piece')) {
-                        console.log('Found hovering piece. Dealing with piece over');
                         let spikeID = object.getData('spike');
-                        console.log(`Piece is currently on spike: ${spikeID}`);
-                        //vars.pieces.nlHoverRequest('spikeNL_' + object);
+                        if ('spikeNL_' + spikeID!==vars.game.spikeOver) {
+                            console.log('Found hovering piece. Dealing with piece over');
+                            console.log(`Piece is currently on spike: ${spikeID}`);
+                            let spikeObject = scene.children.getByName('spikeNL_' + spikeID);
+                            vars.pieces.nlHoverRequest(spikeObject);
+                        }
                     } else {
                         // This fires so often ive disabled it
                         // its the hover over, but its only needed
@@ -877,6 +880,7 @@ var vars = {
         nlHoverRequest: function(_object) {
             let gV = vars.game;
             if (_object.name!==gV.spikeOver) {
+                console.log('Different spike found, hover request allowed.');
                 // get the x position of this spike
                 let spikeX = _object.x;
                 gV.spikeOver = _object.name;
@@ -916,6 +920,7 @@ var vars = {
                     piece  = spikeData.pop();
                 }
                 gV.spikeFrom = spikeNum;
+                gV.spikeOver = 'spikeNL_' + spikeNum;
 
                 let toY = 250;
                 console.log('Lifting pieces F and B for: ' + piece);
