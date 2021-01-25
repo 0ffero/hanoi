@@ -1,3 +1,5 @@
+var numArray = Phaser.Utils.Array.NumberArray;
+
 function update() {
     if (scene.children.getByName('timerInt')!==null && vars.game.timer.totalTime===-1 && vars.game.firstMove===false) {
         vars.game.timer.update();
@@ -5,9 +7,9 @@ function update() {
 }
 
 var vars = {
-    DEBUG: true,
+    DEBUG: false,
 
-    version: 0.994,
+    version: 0.995,
 
     init: function() {
         let redInc = 1114112; let blueInc = 17; let div=2;
@@ -26,7 +28,7 @@ var vars = {
 
     dev: {
         piecesAlpha: function(_alpha=0.2) {
-            console.log(`%cSetting pieces alpha to ${_alpha}`, consts.console.info);
+            if (vars.DEBUG) { console.log(`%cSetting pieces alpha to ${_alpha}`, consts.console.info); }
             scene.children.each( (c)=> {
                 if (c.name.includes('piece')) {
                     c.setAlpha(_alpha);
@@ -50,9 +52,11 @@ var vars = {
         images: {
             init: function() {
                 scene.load.image('background',   'images/background.jpg');
+                scene.load.image('difficultyH',  'images/difficultyHeading.png');
                 scene.load.image('options',      'images/options.png');
                 scene.load.image('perfectScore', 'images/perfectScoreWAlpha.png');
                 scene.load.image('restart',      'images/restart.png');
+                scene.load.image('startSpike',   'images/startSpike.png');
                 scene.load.image('spark1',       'particles/white.png');
                 scene.load.image('whitePixel',   'images/whitePixel.png');
                 scene.load.image('winner',       'images/winner.png');
@@ -69,6 +73,7 @@ var vars = {
                 }
 
                 scene.load.spritesheet('difficultyButtons', 'images/difficultyButtons-ext.png', { frameWidth: 200, frameHeight: 200, margin: 1, spacing: 2 })
+                scene.load.spritesheet('spikeOptions', 'images/spikeOptions-ext.png', { frameWidth: 200, frameHeight: 200, margin: 1, spacing: 2 })
             }
         },
 
@@ -81,7 +86,7 @@ var vars = {
 
     groups: {
         init: function() {
-            console.log('Initialising Groups');
+            if (vars.DEBUG) { console.log('Initialising Groups'); }
             scene.groups = {};
             scene.groups.pegs   = scene.add.group().setName('pegsGroup');
             scene.groups.pieces = {}
@@ -90,11 +95,13 @@ var vars = {
                 scene.groups.pieces['piece_' + c] = scene.add.group().setName('piece_' + c);
             })
             scene.groups.ui = scene.add.group().setName('uiGroup');
+            scene.groups.uiSO = scene.add.group().setName('uiSpikeOptionsGroup');
+
             scene.groups.winnerUI = scene.add.group().setName('winnerUIGroup');
         },
 
         rebuildPieceGroups: function() {
-            console.log('Rebuildng groups');
+            if (vars.DEBUG) { ('Rebuildng groups'); }
             let pieceGroups = Phaser.Utils.Array.NumberArray(0,vars.game.difficulty-1);
             pieceGroups.forEach( (c)=> {
                 scene.groups.pieces['piece_' + c] = scene.add.group().setName('piece_' + c);
@@ -169,7 +176,7 @@ var vars = {
             times.forEach( (c, i)=>{
                 if (timeIsGood===false) {
                     if (newTime<c) {
-                        console.log(`Players time ${newTime} is a best time. Saving. It will be placed in position ${i}`);
+                        if (vars.DEBUG) { console.log(`Players time ${newTime} is a best time. Saving. It will be placed in position ${i}`); }
                         timeIsGood=true;
                         times.splice(i,0,newTime); times.pop();
                         lS.hanoi_times = JSON.stringify(gV.timer.bestTimes);
@@ -227,7 +234,7 @@ var vars = {
         },
 
         bestScoreForDifficultyCheck: function(_difficulty,_pMoves) {
-            console.log('Checking for high score.');
+            if (vars.DEBUG) { ('Checking for high score.'); }
             let bestScore = vars.player.scores[_difficulty];
             if (_pMoves<bestScore) {
                 vars.player.scores[_difficulty]=_pMoves;
@@ -335,17 +342,18 @@ var vars = {
                 // BEGIN GAME
                 // first update the best score and difficulty text
                 vars.UI.bestScoreUpdate();
-                // First, build the sizes of each piece
+                vars.UI.bestTimesUpdate();
+                // Build the sizes of each piece
                 vars.pieces.nlSetPieceSizes();
                 // build the new groups for the pieces
                 vars.groups.rebuildPieceGroups();
 
                 // OK, everything has been reset. Initialise the pieces
                 if (vars.files.newLook===true) {
-                    console.log('Initialising the pieces for new look');
+                    if (vars.DEBUG) { console.log('Initialising the pieces for new look'); }
                     vars.pieces.nlDrawPieces();
                 } else {
-                    console.log('Initialising the pieces for the old look');
+                    if (vars.DEBUG) { console.log('Initialising the pieces for the old look'); }
                     vars.pieces.drawPieces();
                 }
                 gV.timer.reset();
@@ -358,12 +366,12 @@ var vars = {
             if (_lvl !== vars.game.difficulty) {
                 vars.localStorage.saveDifficulty(_lvl);
                 console.clear();
-                console.log('%cDifferent difficulty level selected\n\nSetting difficulty and restarting the game.', consts.console.important);
+                if (vars.DEBUG) { console.log('%cDifferent difficulty level selected\n\nSetting difficulty and restarting the game.', consts.console.important); }
                 vars.game.restart(true, _lvl);
                 // fade out the options
                 vars.options.hide();
             } else {
-                console.log('Same difficulty level selected. Hiding the options');
+                if (vars.DEBUG) { console.log('Same difficulty level selected. Hiding the options'); }
                 // NOTE : Would if be better to restart the game here? Or just hide the options?
                 // Theyve clicked on options, so the assumption is that theyre here for a reason... right?
                 // If thats the case. What would the user expect by clicking on the same difficulty?
@@ -417,7 +425,7 @@ var vars = {
         pieceMoving: false,
         init: function() {
             scene.input.on('gameobjectdown', function (pointer, object) {
-                if (vars.UI.optionsVisible===false) {
+                if (vars.options.areVisible===false) {
                     let gV = vars.game; let pV = vars.pieces;
                     // PLAYER IS PLAYING THE GAME
                     if (object.name.includes('piece_') || object.name.includes('spike_')) {
@@ -425,37 +433,42 @@ var vars = {
                     } else if (object.name.includes('pieceF_') || object.name.includes('pieceB_') || object.name.includes('spikeNL_')) {
                         if (gV.liftedPiece===-1) {
                             if (gV.firstMove===true) { gV.firstMove=false; gV.timer.start(); }
-                            console.log(`Lifting piece with name: ${object.name}`);
+                            if (vars.DEBUG) { console.log(`Lifting piece with name: ${object.name}`); }
                             pV.nlLiftPiece(object.name);
                         } else { // dropping the current piece
-                            console.log('%cDropping Piece', consts.console.importantish);
+                            if (vars.DEBUG) { console.log('%cDropping Piece', consts.console.importantish); }
                             pV.nlDropPiece(object);
                         }
                     } else {
                         if (object.name==='UI_options') {
-                            console.log('Showing Options Screen');
+                            if (vars.DEBUG) { console.log('Showing Options Screen'); }
                             vars.options.show();
                         } else if (object.name==='UI_restart') {
                             console.clear();
-                            console.log('Restarting the game');
+                            if (vars.DEBUG) { console.log('Restarting the game'); }
                             vars.game.restart(false);
                         } else if (object.name==='background' && gV.liftedPiece!==-1 && gV.spikeOver!==-1) {
-                            console.log('%cDropping Piece', consts.console.importantish);
+                            if (vars.DEBUG) { console.log('%cDropping Piece', consts.console.importantish); }
                             // figure out what piece
                             let piece = scene.children.getByName(gV.liftedPiece.replace('piece_','pieceF_'));
                             pV.nlDropPiece(piece);
                         } else {
-                            console.error(`UNKNOWN PIECE with name: ${object.name} (clicked)`);
+                            if (vars.DEBUG) { console.error(`UNKNOWN PIECE with name: ${object.name} (clicked)`); }
                         }
                     }
                 } else {
                     // OPTIONS SCREEN IS VISIBLE
                     if (object.name==='optionsBG' || object.name==='UI_options') {
-                        console.log('Hiding the options screen');
+                        if (vars.DEBUG) { console.log('Hiding the options screen'); }
                         vars.options.hide();
                     } else if (object.name.includes('difficulty_')) {
                         let difficultyLevel = ~~(object.name.replace('difficulty_',''));
                         vars.game.setDifficulty(difficultyLevel);
+                    } else if (object.name === 'o_selectedSpike') {
+                        vars.options.showStartSpikeOptions();
+                    } else if (object.name.includes('spikeStart_')) {
+                        let ssID = ~~(object.name.replace('spikeStart_',''));
+                        vars.options.changeStartSpike(ssID);
                     } else {
                         console.error(`Player clicked an unhandled object called ${object.name}`);
                     }
@@ -463,18 +476,17 @@ var vars = {
             })
 
             scene.input.on('gameobjectover', function (pointer, object) {
-                if (vars.UI.optionsVisible===false) {
+                if (vars.options.areVisible===false) {
                     let gV = vars.game;
                     if (gV.liftedPiece!==-1 && object.name.includes('spike_')) { // move the floating piece to this spikes x position
                         vars.input.hoverRequest(object.name);
                     } else if (gV.liftedPiece!==-1 && object.name.includes('spikeNL_')) {
-                        console.log('Found hovering piece. Dealing with spike over');
+                        if (vars.DEBUG) { console.log('Found hovering piece. Dealing with spike over'); }
                         vars.pieces.nlHoverRequest(object);
                     } else  if (gV.liftedPiece!==-1 && object.name.includes('piece')) {
                         let spikeID = object.getData('spike');
                         if ('spikeNL_' + spikeID!==vars.game.spikeOver) {
-                            console.log('Found hovering piece. Dealing with piece over');
-                            console.log(`Piece is currently on spike: ${spikeID}`);
+                            if (vars.DEBUG) { console.log(`Found hovering piece. Dealing with piece over.\nPiece is currently on spike: ${spikeID}`); }
                             let spikeObject = scene.children.getByName('spikeNL_' + spikeID);
                             vars.pieces.nlHoverRequest(spikeObject);
                         }
@@ -492,7 +504,7 @@ var vars = {
 
 
         disable: function() {
-            console.log('%cStopped all input.', consts.console.important);
+            if (vars.DEBUG) { console.log('%cStopped all input.', consts.console.important); }
             scene.input.enabled=false;
         },
 
@@ -522,7 +534,7 @@ var vars = {
 
         enable: function() {
             scene.input.enabled=true;
-            console.log('%cInput enabled again.', consts.console.important);
+            if (vars.DEBUG) { console.log('%cInput enabled again.', consts.console.important); }
         },
 
         getSpikeIDfromPiece: function(_pieceName) {
@@ -530,7 +542,7 @@ var vars = {
         },
 
         hoverRequest: function(_spikeName) {
-            console.log(`Moving hovering piece to be above ${_spikeName}`);
+            if (vars.DEBUG) { console.log(`Moving hovering piece to be above ${_spikeName}`); }
             let duration = consts.durations.pieceMove;
             vars.game.spikeOver = _spikeName;
             let piece = scene.children.getByName(vars.game.liftedPiece);
@@ -539,7 +551,7 @@ var vars = {
         },
 
         isMoveValid: function(_spike, _spikeData, _liftedPiece) {
-            console.log(`Lifted Piece: ${_liftedPiece}`);
+            if (vars.DEBUG) { console.log(`Lifted Piece: ${_liftedPiece}`); }
             let valid = true;
             if (_spikeData.length>0) {
                 _spikeData.forEach( (c)=> {
@@ -555,19 +567,19 @@ var vars = {
             let piece = _pieceName;
             let spikeNum = -1;
             if (_pieceName.includes('spike_')) {
-                console.log('Find the top piece on this spike');
+                if (vars.DEBUG) { console.log('Find the top piece on this spike'); }
                 spikeNum = piece.replace('spike_','');
                 let spikeData = vars.game.piecePositions['spike_' + spikeNum];
                 piece  = spikeData.pop();
             } else { // we need to check that the piece clicked on is at the top of the spike
                 // grab the top piece
-                console.log('Finding the top piece on this spike');
+                if (vars.DEBUG) { console.log('Finding the top piece on this spike'); }
                 spikeNum = vars.input.getSpikeIDfromPiece(piece);
                 let spikeData = vars.game.piecePositions['spike_' + spikeNum];
                 piece  = spikeData.pop();
             }
 
-            console.log('Lifting ' + piece);
+            if (vars.DEBUG) { console.log('Lifting ' + piece); }
             vars.game.liftedPiece = piece;
             let object = scene.children.getByName(piece);
             vars.game.spikeFrom = spikeNum;
@@ -588,6 +600,8 @@ var vars = {
     },
 
     options: {
+        areVisible: false,
+
         init: function() {
             // OPTIONS BUTTON & RESTART BUTTONS
             let depths = consts.depths;
@@ -598,31 +612,83 @@ var vars = {
             // BACKGROUND
             let bg = scene.add.image(vars.canvas.cX, vars.canvas.cY, 'whitePixel').setName('optionsBG').setTint(0x0).setScale(vars.canvas.width, vars.canvas.height).setAlpha(0.9).setDepth(depths.options-1).setVisible(false).setInteractive();
             scene.groups.ui.add(bg);
+            // DIFFICULTY TITLE
+            let dH = scene.add.image(vars.canvas.cX, 100, 'difficultyH').setDepth(consts.depths.options).setName('difficultyH').setVisible(false);
+            scene.groups.ui.add(dH);
             // DIFFICULTY OPTIONS
             let dLevels = Phaser.Utils.Array.NumberArray(3,7);
             dLevels.forEach( (c)=> {
                 let x = 480 + ((c-3)*240);
-                let difC = scene.add.image(x, vars.canvas.cY, 'difficultyButtons', c-3).setName('difficulty_' + c).setDepth(depths.options+1).setVisible(false).setInteractive();
+                let difC = scene.add.image(x, vars.canvas.cY-225, 'difficultyButtons', c-3).setName('difficulty_' + c).setDepth(depths.options+1).setVisible(false).setInteractive();
                 scene.groups.ui.add(difC);
+            })
+            // RANDOM SPIKE
+            let sS = scene.add.image(815, 600, 'startSpike').setDepth(consts.depths.options).setVisible(false);
+            let sRO = scene.add.image(1300, 600, 'spikeOptions',1).setDepth(consts.depths.options).setScale(0.7).setVisible(false).setName('o_selectedSpike').setInteractive();
+            scene.groups.ui.addMultiple([sS,sRO]);
+            [4,3,2,1].forEach( (c)=> {
+                let sO = scene.add.image(1300-(150*(4-c)),750,'spikeOptions',c).setName('spikeStart_'+c).setDepth(depths.options).setScale(0.7).setVisible(false).setAlpha(0).setInteractive();
+                scene.groups.uiSO.add(sO);
             })
         },
 
+        changeStartSpike: function(_ssID) {
+            if (vars.DEBUG) { console.log(`New spike start ID: ${_ssID}`); }
+            if (_ssID>0 && _ssID<5) {
+                if (vars.DEBUG) { console.log('   Valid ID... changing the start spike.'); }
+                if (_ssID!==4) {
+                    vars.game.initialPosition = _ssID;
+                } else {
+                    if (vars.DEBUG) { console.log(`Setting random spike`); }
+                    vars.game.initialPosition = Phaser.Math.RND.integerInRange(1,3);
+                    if (vars.DEBUG) { console.log(`   spike id ${vars.game.initialPosition} selected`); }
+                }
+
+                // hide the options
+                vars.options.hide();
+                // restart the game
+                vars.game.restart(false);
+
+            } else {
+                console.error('Invalid Spike ID. Must be an integer between 1 and 4');
+            }
+        },
+
         hide: function() {
-            if (vars.UI.optionsVisible===true) {
-                vars.UI.optionsVisible=false;
+            let oV = vars.options;
+            if (oV.areVisible===true) {
+                oV.areVisible=false;
                 scene.groups.ui.children.each( (c)=> {
                     c.setVisible(false);
+                })
+                scene.groups.uiSO.children.each((c)=> {
+                    c.setVisible(false).setAlpha(0);
                 })
             }
         },
 
         show: function() {
-            vars.UI.optionsVisible=true;
-            //scene.children.getByName('optionsBG').setVisible(true);
-            scene.groups.ui.children.each( (c)=> {
-                c.setVisible(true);
-            })
+            let oV = vars.options;
+            if (oV.areVisible===false) {
+                oV.areVisible=true;
+                scene.groups.ui.children.each( (c)=> {
+                    c.setVisible(true);
+                })
+            }
         },
+
+        showStartSpikeOptions: function() {
+            [4,3,2,1].forEach( (c)=> {
+                let o = scene.children.getByName('spikeStart_'+c);
+                o.setVisible(true);
+                scene.tweens.add({
+                    targets: o,
+                    alpha: 1,
+                    delay: 25*(4-c),
+                    durations: 100
+                })
+            })
+        }
 
     },
 
@@ -674,8 +740,7 @@ var vars = {
 
     pieces: {
         newLook: {
-            offsets: [],
-            ys: [],
+            pushes: [] // this stores the y push between each piece
         },
         sizes: [],
         spacing: 2,
@@ -705,6 +770,20 @@ var vars = {
                 console.error('The spike ID must be an integer');
                 return false;
             }
+        },
+
+        nlCreateYPushes: function() {
+            if (vars.DEBUG) { console.log(`%cThis is an important function.\nIt Sets up the offset for each position on a spike.\nIts needed to push the pieces away from the previous piece.`, consts.console.importantish); }
+            let a = Phaser.Utils.Array.NumberArray(1,vars.game.difficulty-1);
+            let pushes = vars.pieces.newLook.pushes;
+            pushes.push(10);
+            let push=10;
+            let div = 10/(vars.game.difficulty-2);
+            a.forEach( (c)=> {
+                push -= div;
+                pushes.push(push);
+            })
+            pushes.pop();
         },
 
         nlDrawPieces: function() {
@@ -739,40 +818,41 @@ var vars = {
                 scene.groups.pieces['piece_' + c].addMultiple([b,f]);
                 piecePositions.push('piece_' + c);
             })
-            
-            console.log('%cPlacing the pieces in the proper positions...', consts.console.important);
+
+            if (vars.DEBUG) { console.log('%cPlacing the pieces in the proper positions...', consts.console.important); }
             let pieceArray = pieceGroups;
             pieceArray.splice(0,1);
             let pV = vars.pieces;
             pieceArray.forEach( (c)=>{ pV.nlGetYpositionForPiece(c); })
             pV.backSetOffsets();
-            console.log('%c...COMPLETE.', consts.console.important);
+            pV.nlCreateYPushes();
+            pV.updatePositions(true);
+            if (vars.DEBUG) { console.log('%c...COMPLETE.', consts.console.important); }
         },
 
         nlDropPiece: function(object) {
             let gV = vars.game; let pV = vars.pieces;
             let liftedPieceID = ~~(gV.liftedPiece.replace('piece_',''));
             if (object.name.includes('spike')) {
-                console.log(`Dropping piece with name: ${gV.liftedPiece} on spike: ${object.name}`);
+                if (vars.DEBUG) { console.log(`Dropping piece with name: ${gV.liftedPiece} on spike: ${object.name}`); }
                 let spikeID = ~~(object.name.replace('spikeNL_',''));
                 pV.nlGetYpositionForPiece(liftedPieceID,spikeID);
             } else {
-                console.log('User clicked a piece... checking if its the floating piece');
+                if (vars.DEBUG) { console.log('User clicked a piece... checking if its the floating piece'); }
                 let pieceName = object.name;
                 let pieceID=-1;
                 if (pieceName.includes('F')) {
-                    console.log('They clicked on the front of a piece');
+                    if (vars.DEBUG) { console.log('They clicked on the front of a piece'); }
                     pieceID = ~~(pieceName.replace('pieceF_',''));
                 } else {
                     pieceID = ~~(pieceName.replace('pieceB_',''));
                 }
                 if (liftedPieceID===pieceID) { // it is the lifted piece
-                    console.log('Dropping piece on to spike with name ' + gV.spikeOver);
+                    if (vars.DEBUG) { console.log('Dropping piece on to spike with name ' + gV.spikeOver); }
                     let spikeID = ~~(gV.spikeOver.replace('spikeNL_',''));
                     pV.nlGetYpositionForPiece(liftedPieceID,spikeID);
                 } else {
                     let spikeID = vars.input.getSpikeIDfromPiece(object.name)
-                    console.log(spikeID);
                     pV.nlGetYpositionForPiece(liftedPieceID,spikeID);
                     return true;
                 }
@@ -784,7 +864,7 @@ var vars = {
                 _f.setData({ moving: false, spike: _spikeID });
                 _b.setData({ moving: false, spike: _spikeID });
             } else {
-                console.log(`Error: Invalid Spike ID (${_spikeID})`);
+                if (vars.DEBUG) { console.log(`Error: Invalid Spike ID (${_spikeID})`); }
                 return false;
             }
         },
@@ -806,7 +886,7 @@ var vars = {
                     let f1 = scene.children.getByName('pieceF_' + _pieceID);
                     let newYPos = f0.y - ~~(f0.getData('upperSize')) + ~~(f1.getData('bottomOffset')*2);
                     let yDiff = f1.y-newYPos;
-                    console.log(`New Y Pos: ${newYPos}. yDiff: ${yDiff}`);
+                    if (vars.DEBUG) { console.log(`New Y Pos: ${newYPos}. yDiff: ${yDiff}`); }
                     let b1 = scene.children.getByName('pieceB_' + _pieceID); b1.y-=yDiff;
                     b1.setData('yDiff', yDiff);
                     f1.y = newYPos;
@@ -857,7 +937,7 @@ var vars = {
                             gV.clearPickUpVars();
                             valid = true;
                         } else {
-                            console.log('%cThis move is invalid!', consts.console.importantish);
+                            if (vars.DEBUG) { console.log('%cThis move is invalid!', consts.console.importantish); }
                             // make the floating piece do a cute little bounce
                             scene.tweens.add({ targets: f1, y: f1.y+100, duration: duration, yoyo: true })
                             scene.tweens.add({ targets: b1, y: b1.y+100, duration: duration, yoyo: true })
@@ -866,7 +946,7 @@ var vars = {
                     }
 
                     if (valid===true) {
-                        console.log('Valid move. Checking for win');
+                        if (vars.DEBUG) { console.log('Valid move. Checking for win'); }
                         scene.sound.play('dropPiece'); vars.game.checkForWin();
                     }
                     return valid;
@@ -880,7 +960,7 @@ var vars = {
         nlHoverRequest: function(_object) {
             let gV = vars.game;
             if (_object.name!==gV.spikeOver) {
-                console.log('Different spike found, hover request allowed.');
+                if (vars.DEBUG) { console.log('Different spike found, hover request allowed.'); }
                 // get the x position of this spike
                 let spikeX = _object.x;
                 gV.spikeOver = _object.name;
@@ -908,13 +988,13 @@ var vars = {
                 let piece = _pieceName;
                 let spikeNum = -1;
                 if (_pieceName.includes('spikeNL_')) {
-                    console.log('Find the top piece on this spike');
+                    if (vars.DEBUG) { console.log('Find the top piece on this spike'); }
                     spikeNum = piece.replace('spikeNL_','');
                     let spikeData = gV.piecePositions['spike_' + spikeNum];
                     piece  = spikeData.pop();
                 } else { // we need to check that the piece clicked on is at the top of the spike
                     // grab the top piece
-                    console.log('Finding the top piece, in case the clicked on piece isnt it.');
+                    if (vars.DEBUG) { console.log('Finding the top piece, in case the clicked on piece isnt it.'); }
                     spikeNum = vars.input.getSpikeIDfromPiece(piece);
                     let spikeData = gV.piecePositions['spike_' + spikeNum];
                     piece  = spikeData.pop();
@@ -923,7 +1003,7 @@ var vars = {
                 gV.spikeOver = 'spikeNL_' + spikeNum;
 
                 let toY = 250;
-                console.log('Lifting pieces F and B for: ' + piece);
+                if (vars.DEBUG) { console.log('Lifting pieces F and B for: ' + piece); }
                 gV.liftedPiece = piece;
                 let pieceNames = vars.pieces.nlGetFloatingPieceNames();
                 let f = scene.children.getByName(pieceNames[0]);
@@ -958,8 +1038,10 @@ var vars = {
                 let f = scene.children.getByName('pieceF_' + o);
                 let b = scene.children.getByName('pieceB_' + o);
 
-                console.log(`%cFRONT: name: ${f.name} y: ${f.y} (minY: ${f.getData('minY')}) ${f.getData('bottomOffset')} ${f.getData('upperSize')}`, consts.console.info);
-                console.log(`%cBACK: yDiff: ${b.getData('yDiff')} Front Offset: ${b.getData('frontOffset')}`, consts.console.info);
+                if (vars.DEBUG) { 
+                    console.log(`%cFRONT: name: ${f.name} y: ${f.y} (minY: ${f.getData('minY')}) ${f.getData('bottomOffset')} ${f.getData('upperSize')}`, consts.console.info);
+                    console.log(`%cBACK: yDiff: ${b.getData('yDiff')} Front Offset: ${b.getData('frontOffset')}`, consts.console.info);
+                }
             }
         },
 
@@ -967,6 +1049,18 @@ var vars = {
             let nl = vars.pieces.newLook;
             nl.ys=_ys;
             nl.offsets = _offsets;
+        },
+
+        updatePositions: function() {
+            let offsets = [...vars.pieces.newLook.pushes]; // shallow copy
+            let offset = 0;
+            numArray(1,vars.game.difficulty-1).forEach( (c)=> {
+                offset += ~~(offsets.splice(0,1));
+                let f = scene.children.getByName('pieceF_' + c);
+                let b = scene.children.getByName('pieceB_' + c);
+                f.y -= offset;
+                b.y -= offset;
+            })
         }
     },
 
@@ -1071,7 +1165,7 @@ var vars = {
                 let alpha = 1; let colour = '#F00';
                 let ext = '';
                 if (i===0) { alpha=0.5; colour='#000'; ext = '_S' }
-                let textCSS = Object.assign({}, consts.text.default); // shallow copy
+                let textCSS = Object.assign({}, consts.text.default); // shallow bit kinda deep copy
                 textCSS.color = colour;
                 let strokeC = consts.tints.darkRed;
                 scene.add.text(1500 - (i*offset), c, 'Moves: ', textCSS).setStroke(strokeC, 6).setFontSize(48).setName('movesText' + ext).setAlpha(alpha).setDepth(depth);
